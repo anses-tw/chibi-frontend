@@ -9,7 +9,7 @@ export default function CampusChibiGenerator() {
   const [step, setStep] = useState('selectGroup'); 
   const [groupId, setGroupId] = useState(null);
   const [sourceImage, setSourceImage] = useState(null);
-  const [sourceImageBase64, setSourceImageBase64] = useState(null); // 新增：儲存給 AI 看的照片代碼
+  const [sourceImageBase64, setSourceImageBase64] = useState(null);
   const [promptData, setPromptData] = useState({ 
     chineseIdea: '', 
     englishPrompt: 'chibi style, cute anime character, highly detailed, masterpiece' 
@@ -31,7 +31,6 @@ export default function CampusChibiGenerator() {
     addLog(`選擇第 ${id} 組，已綁定雲端 API Key。`, 'success');
   };
 
-  // 升級：載入照片時，同時壓縮並轉換為 Base64 準備傳給 AI 視覺模型
   const handleImageUpload = (e) => {
     const file = e.target.files[0];
     if (file) {
@@ -65,7 +64,6 @@ export default function CampusChibiGenerator() {
     }
   };
 
-  // 升級：翻譯時一併將照片傳給後端進行「視覺分析」
   const handleTranslate = async () => {
     if (!promptData.chineseIdea && !sourceImageBase64) return;
     setIsTranslating(true);
@@ -88,6 +86,7 @@ export default function CampusChibiGenerator() {
       setPromptData(prev => ({ ...prev, englishPrompt: data.englishPrompt }));
       addLog(`[200 OK] 視覺特徵融合翻譯成功！`, 'success');
     } catch (err) {
+      setErrorState({ status: 400, message: err.message });
       addLog(`[Error] ${err.message}`, 'error');
     } finally {
       setIsTranslating(false);
@@ -206,7 +205,7 @@ export default function CampusChibiGenerator() {
         </div>
 
         <div className="flex justify-center -my-2 relative z-20 mb-4">
-          <button onClick={handleTranslate} disabled={isTranslating || !sourceImageBase64} className="bg-sky-500 text-white px-6 py-2 rounded-full font-bold shadow-lg hover:scale-105 disabled:bg-gray-300 transition-transform flex items-center gap-2">
+          <button onClick={handleTranslate} disabled={isTranslating || (!promptData.chineseIdea && !sourceImageBase64)} className="bg-sky-500 text-white px-6 py-2 rounded-full font-bold shadow-lg hover:scale-105 disabled:bg-gray-300 transition-transform flex items-center gap-2">
             <Languages className={`w-5 h-5 ${isTranslating ? 'animate-spin' : ''}`} />
             {isTranslating ? '視覺分析與翻譯中...' : '萃取照片特徵並轉換'}
           </button>
