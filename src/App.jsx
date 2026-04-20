@@ -9,6 +9,7 @@ export default function CampusChibiGenerator() {
   const [step, setStep] = useState('selectGroup'); 
   const [groupId, setGroupId] = useState(null);
   const [sourceImage, setSourceImage] = useState(null);
+  const [sourceImageBase64, setSourceImageBase64] = useState(null); // 新增：儲存給 AI 看的照片代碼
   const [promptData, setPromptData] = useState({ 
     chineseIdea: '', 
     englishPrompt: 'chibi style, cute anime character, highly detailed, masterpiece' 
@@ -18,7 +19,6 @@ export default function CampusChibiGenerator() {
   const [isTranslating, setIsTranslating] = useState(false);
   const [logs, setLogs] = useState([]);
 
-  // --- 你的專屬後端網址 ---
   const BACKEND_URL = "https://chibi-backend-q3xl.onrender.com";
 
   const addLog = (msg, type = 'info') => {
@@ -31,31 +31,62 @@ export default function CampusChibiGenerator() {
     addLog(`選擇第 ${id} 組，已綁定雲端 API Key。`, 'success');
   };
 
+  // 升級：載入照片時，同時壓縮並轉換為 Base64 準備傳給 AI 視覺模型
   const handleImageUpload = (e) => {
     const file = e.target.files[0];
     if (file) {
       setSourceImage(URL.createObjectURL(file));
-      addLog(`照片載入成功: ${file.name}`, 'info');
+      addLog(`照片載入成功，準備進行視覺特徵萃取...`, 'info');
+
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          const MAX_SIZE = 512;
+          let width = img.width;
+          let height = img.height;
+
+          if (width > height) {
+            if (width > MAX_SIZE) { height *= MAX_SIZE / width; width = MAX_SIZE; }
+          } else {
+            if (height > MAX_SIZE) { width *= MAX_SIZE / height; height = MAX_SIZE; }
+          }
+          canvas.width = width; canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, width, height);
+          
+          const base64Data = canvas.toDataURL('image/jpeg', 0.8).split(',')[1];
+          setSourceImageBase64(base64Data);
+        };
+        img.src = event.target.result;
+      };
+      reader.readAsDataURL(file);
     }
   };
 
+  // 升級：翻譯時一併將照片傳給後端進行「視覺分析」
   const handleTranslate = async () => {
-    if (!promptData.chineseIdea) return;
+    if (!promptData.chineseIdea && !sourceImageBase64) return;
     setIsTranslating(true);
-    addLog(`[POST] 發送翻譯請求至 Render...`, 'info');
+    addLog(`[POST] 發送照片與文字，請 AI 進行視覺特徵分析與翻譯...`, 'info');
     
     try {
       const response = await fetch(`${BACKEND_URL}/api/translate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ groupId: groupId, chineseIdea: promptData.chineseIdea })
+        body: JSON.stringify({ 
+          groupId: groupId, 
+          chineseIdea: promptData.chineseIdea || "依照照片人物產生", 
+          imageBase64: sourceImageBase64 
+        })
       });
       
       const data = await response.json();
-      if (!response.ok) throw new Error(data.detail || "翻譯失敗");
+      if (!response.ok) throw new Error(data.detail || "分析失敗");
       
       setPromptData(prev => ({ ...prev, englishPrompt: data.englishPrompt }));
-      addLog(`[200 OK] 翻譯成功！`, 'success');
+      addLog(`[200 OK] 視覺特徵融合翻譯成功！`, 'success');
     } catch (err) {
       addLog(`[Error] ${err.message}`, 'error');
     } finally {
@@ -92,17 +123,17 @@ export default function CampusChibiGenerator() {
     setStep('selectGroup');
     setGroupId(null);
     setSourceImage(null);
+    setSourceImageBase64(null);
     setGeneratedImage(null);
     setPromptData({ chineseIdea: '', englishPrompt: 'chibi style, cute anime character, highly detailed, masterpiece' });
     setErrorState(null);
     addLog(`系統已重置。`, 'info');
   };
 
-  // 新增：標準的安全下載圖片機制
   const handleDownload = () => {
     const link = document.createElement('a');
     link.href = generatedImage;
-    link.download = `chibi_avatar_${Date.now()}.png`; // 自動幫圖片取一個專屬檔名
+    link.download = `chibi_avatar_${Date.now()}.png`; 
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -157,7 +188,7 @@ export default function CampusChibiGenerator() {
         <div className="space-y-2 mb-4">
             <label className="text-sm font-semibold text-gray-600 flex items-center gap-2">
               中文許願池 (Idea)
-              <span className="text-xs font-normal text-amber-500 bg-amber-50 px-2 py-0.5 rounded-full">支援翻譯轉換</span>
+              <span className="text-xs font-normal text-amber-500 bg-amber-50 px-2 py-0.5 rounded-full">支援翻譯與照片特徵提取</span>
             </label>
             <textarea className="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 h-24 focus:ring-2 focus:ring-amber-300 focus:outline-none resize-none" placeholder="例如：穿著水手服，戴著貓耳..." value={promptData.chineseIdea} onChange={(e) => setPromptData({...promptData, chineseIdea: e.target.value})} />
             
@@ -175,8 +206,9 @@ export default function CampusChibiGenerator() {
         </div>
 
         <div className="flex justify-center -my-2 relative z-20 mb-4">
-          <button onClick={handleTranslate} disabled={isTranslating || !promptData.chineseIdea} className="bg-sky-500 text-white rounded-full p-3 shadow-lg hover:scale-110 disabled:bg-gray-300 transition-transform">
+          <button onClick={handleTranslate} disabled={isTranslating || !sourceImageBase64} className="bg-sky-500 text-white px-6 py-2 rounded-full font-bold shadow-lg hover:scale-105 disabled:bg-gray-300 transition-transform flex items-center gap-2">
             <Languages className={`w-5 h-5 ${isTranslating ? 'animate-spin' : ''}`} />
+            {isTranslating ? '視覺分析與翻譯中...' : '萃取照片特徵並轉換'}
           </button>
         </div>
         
@@ -189,7 +221,7 @@ export default function CampusChibiGenerator() {
         
         <button onClick={handleGenerate} disabled={!sourceImage || !promptData.englishPrompt} className="w-full bg-gradient-to-r from-amber-400 to-amber-500 disabled:from-gray-300 disabled:to-gray-400 text-white font-bold text-lg py-4 rounded-xl shadow-lg hover:scale-[1.02] active:scale-95 transition-all flex justify-center items-center gap-2">
             <Palette className="w-6 h-6" />
-            開始魔法轉換
+            開始生成專屬 Q 版
         </button>
       </div>
     </div>
@@ -219,7 +251,6 @@ export default function CampusChibiGenerator() {
             <img src={generatedImage} alt="Chibi" className="w-48 h-48 rounded-xl shadow-inner" />
           </div>
           
-          {/* 修改這顆按鈕的 onClick 事件 */}
           <button onClick={handleDownload} className="bg-sky-500 hover:bg-sky-600 text-white px-8 py-3 rounded-full font-bold shadow-lg transform transition-transform active:scale-95 flex items-center gap-2">
             <Download className="w-5 h-5" />
             下載照片
@@ -231,7 +262,7 @@ export default function CampusChibiGenerator() {
       
       <div className="w-full max-w-6xl bg-slate-900 rounded-t-2xl p-4 mt-12 h-40 overflow-y-auto font-mono text-xs text-sky-300">
         <div className="text-slate-500 mb-2 font-bold uppercase">教學控制台日誌：</div>
-        {logs.map((log, i) => <div key={i}>[{log.time}] {log.msg}</div>)}
+        {logs.map((log, i) => <div key={log.time+i}>[{log.time}] {log.msg}</div>)}
       </div>
     </div>
   );
