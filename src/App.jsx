@@ -98,6 +98,17 @@ export default function CampusChibiGenerator() {
     addLog(`系統已重置。`, 'info');
   };
 
+  // 新增：標準的安全下載圖片機制
+  const handleDownload = () => {
+    const link = document.createElement('a');
+    link.href = generatedImage;
+    link.download = `chibi_avatar_${Date.now()}.png`; // 自動幫圖片取一個專屬檔名
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    addLog(`照片下載指令已送出！`, 'success');
+  };
+
   const renderGroupSelection = () => (
     <div className="flex flex-col items-center justify-center space-y-8 py-10">
       <div className="text-center space-y-4">
@@ -173,7 +184,7 @@ export default function CampusChibiGenerator() {
             <label className="text-sm font-semibold text-gray-600">
               英文咒語 (Prompt) - 送往 AI 模型的實際內容
             </label>
-            <textarea className="w-full bg-slate-800 text-green-400 font-mono text-sm rounded-xl p-3 h-32 focus:ring-2 focus:ring-sky-500 focus:outline-none resize-none shadow-inner" value={promptData.englishPrompt} onChange={(e) => setPromptData({...promptData, englishPrompt: e.target.value})} />
+            <textarea className="w-full bg-slate-800 text-green-400 font-mono text-sm rounded-xl p-3 h-32 focus:ring-2 focus:ring-sky-500 focus:outline-none resize-none shadow-inner" value={promptData.englishPrompt} readOnly />
         </div>
         
         <button onClick={handleGenerate} disabled={!sourceImage || !promptData.englishPrompt} className="w-full bg-gradient-to-r from-amber-400 to-amber-500 disabled:from-gray-300 disabled:to-gray-400 text-white font-bold text-lg py-4 rounded-xl shadow-lg hover:scale-[1.02] active:scale-95 transition-all flex justify-center items-center gap-2">
@@ -207,7 +218,13 @@ export default function CampusChibiGenerator() {
           <div className="bg-white p-10 rounded-[3rem] shadow-2xl border-8 border-gray-100">
             <img src={generatedImage} alt="Chibi" className="w-48 h-48 rounded-xl shadow-inner" />
           </div>
-          <button onClick={() => window.open(generatedImage)} className="bg-sky-500 text-white px-8 py-3 rounded-full font-bold">下載照片</button>
+          
+          {/* 修改這顆按鈕的 onClick 事件 */}
+          <button onClick={handleDownload} className="bg-sky-500 hover:bg-sky-600 text-white px-8 py-3 rounded-full font-bold shadow-lg transform transition-transform active:scale-95 flex items-center gap-2">
+            <Download className="w-5 h-5" />
+            下載照片
+          </button>
+          
           <button onClick={() => setStep('upload')} className="text-gray-500 underline">再試一次</button>
         </div>
       )}
